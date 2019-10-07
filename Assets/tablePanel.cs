@@ -5,7 +5,7 @@ using UnityEngine;
 public class tablePanel : MonoBehaviour {
     public GameObject tableBar;
     public GameObject panel;
-    List<GameObject> objectList;
+    public List<GameObject> objectList = new List<GameObject>();
     public void Init(List<tableData> tlist)
     {
         gameObject.SetActive(true);
@@ -19,6 +19,12 @@ public class tablePanel : MonoBehaviour {
     }
     public void quit()
     {
+        for(int i = 0; i < objectList.Count; i++)
+        {
+            Debug.Log("quit destory " + objectList[i].name);
+            Destroy(objectList[i]);
+        }
+        objectList.Clear();
         gameObject.SetActive(false);
     }
 }

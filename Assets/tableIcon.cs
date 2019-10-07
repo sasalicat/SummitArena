@@ -14,6 +14,7 @@ public class tableIcon : MonoBehaviour {
         {
             msg += name + ",";
         }
+        txt.text = msg;
     }
     public void onClick()
     {
