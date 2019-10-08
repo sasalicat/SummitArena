@@ -7,8 +7,9 @@ using UnityEngine;
 public class DebugPanel : MonoBehaviour,orderHandle {
     public delegate void withDictionary(Dictionary<string,object> args);
     protected List<order> orders = new List<order>();
-    protected List<withDictionary> functionList=new List<withDictionary>();
+    protected withDictionary[] functionList=new withDictionary[10];
     public tablePanel tpanel;
+    public room rpanel;
     public void handle(order order)
     {
         orders.Add(order);
@@ -28,10 +29,14 @@ public class DebugPanel : MonoBehaviour,orderHandle {
         }
         tpanel.Init(tables);
     } 
-
+    public void action3_CreateTableRequest(Dictionary<string,object> args)
+    {
+        rpanel.
+    }
     // Use this for initialization
     void Start () {
-        functionList.Add(action0_GetTableList);
+        functionList[0]=action0_GetTableList;
+        functionList[3] = action3_CreateTableRequest;
 	}
 	
 	// Update is called once per frame

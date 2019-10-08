@@ -121,6 +121,32 @@ public class ConnectClient : MonoBehaviour {
 
                                 break;
                             }
+                        case 3:
+                            {
+                                string[] subs = part[1].Split(';');
+                                int c;
+                                if (!int.TryParse(subs[0], out c))
+                                {
+                                    textShow.Log("解析greeting request 錯誤的code:" + subs[0] + "不是數字");
+                                }
+                                else
+                                {
+                                    if(code == 1)
+                                    {
+                                        Dictionary<string, object> args = new Dictionary<string, object>();
+                                        List<string> names = new List<string>(subs[1].Split('/'));
+                                        args["roles"] = names;
+                                        panel.handle(new order(3, args));
+                                    }
+                                    else
+                                    {
+                                        textShow.Log("創建房間失敗,返回code" + c);
+                                    }
+                                    
+                                }
+                                break;
+                            }
+
 
                     }
                 }
