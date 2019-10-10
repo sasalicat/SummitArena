@@ -6,17 +6,21 @@ using System.Threading;
 using System.Net.Sockets;
 using System.Net;
 using System.Text;
-public class RemoteClient
+public class RemoteEndPoint
 {
     public const int BUFFER_SIZE = 1024;
     byte[] buffer;
-    Socket socket;
-    public RemoteClient(Socket client)
+    protected Socket socket;
+    protected GameEndPoint local_ep;
+    protected virtual void decodeMsg(string msg) {
+    }
+    public RemoteEndPoint(Socket client,GameEndPoint local_ep)
     {
         buffer = new byte[BUFFER_SIZE];
         socket = client;
+        this.local_ep = local_ep;
     }
-    public void doit()
+    public virtual void doit()
     {
         while (true)
         {
@@ -36,7 +40,7 @@ public class RemoteClient
                 //將套接字獲取到的字元陣列轉換為人可以看懂的字串  
                 string strRevMsg = Encoding.UTF8.GetString(buffer, 0, length);
                 textShow.Log("收到信息:" + strRevMsg);
-
+                decodeMsg(strRevMsg);
             }
             catch (Exception ex)
             {
@@ -53,14 +57,88 @@ public class RemoteClient
         socket.Close();
     }
 }
+public class RemoteClient: RemoteEndPoint
+{
+    public RemoteClient(Socket s,GameEndPoint ep):base(s,ep)
+    {
+       
+    }
+    protected virtual void requstEnterRoom()
+    {
+        string packet = "0~";
+
+        for (int i = 0;i<room.Main.playerNames.Count;i++)
+        {
+            if (i == 0)
+            {
+                packet += room.Main.playerNames[0];
+            }
+            else
+            {
+                packet += "/"+room.Main.playerNames[i];
+            }
+
+        }
+        packet += "|";
+        socket.Send(Encoding.UTF8.GetBytes(packet));
+    }
+    protected override void decodeMsg(string msg)
+    {
+        string[] orders = msg.Split('|');
+        foreach (string order in orders)
+        {
+            if (order != "")//split會切出""
+            {
+                string[] parts = msg.Split('~');
+                int code;
+                if (int.TryParse(parts[0], out code))
+                {
+                    switch (code)
+                    {
+                        case 0://client say hello 
+                            {
+                                Dictionary<string, object> args = new Dictionary<string, object>() { { "player", parts[1] } };
+                                local_ep.handler.handle(new order(4, args));
+                                requstEnterRoom();//把當前房間里有誰告訴client
+                                break;
+                            }
+                    }
+                }
+                else
+                {
+                    textShow.Log("來自RemoteClient的錯誤format:" + msg);
+                }
+            }
+        }
+
+    }
+
+}
+public class RemoteServer : RemoteEndPoint
+{
+    
+    public RemoteServer(Socket s,GameEndPoint ep) : base(s,ep)
+    {
+
+    }
+    public override void doit()
+    {
+        string name = ConnectClient.main.username;
+        socket.Send(Encoding.UTF8.GetBytes("0~" + name + "|"));//發送greeting code
+        base.doit();
+    }
+}
 public class GameEndPoint : MonoBehaviour
 {
     public int gamePort = 14747;
     public Socket listenSocket;
     public Thread listenThread;
     public bool BeServer = false;
+    public DebugPanel handler;
     protected List<RemoteClient> connects = new List<RemoteClient>();
     protected List<Thread> threads = new List<Thread>();
+    protected RemoteServer server;
+    protected Thread sthread;
     // Use this for initialization
 
     void listenFunction(object socket)
@@ -72,7 +150,7 @@ public class GameEndPoint : MonoBehaviour
             if (BeServer)
             {
                 textShow.Log("處理新的client");
-                RemoteClient handleClient = new RemoteClient(client);
+                RemoteClient handleClient = new RemoteClient(client,this);
                 Thread forSelfClient = new Thread(handleClient.doit);
                 threads.Add(forSelfClient);
                 connects.Add(handleClient);
@@ -87,6 +165,12 @@ public class GameEndPoint : MonoBehaviour
 
             }
         }
+    }
+    void tempReceive(object socket) {
+        byte[] temp = new byte[1024];
+        ((Socket)socket).Receive(temp);
+        ((Socket)socket).Shutdown(SocketShutdown.Both);
+        ((Socket)socket).Close();
     }
     public void startWaiting()
     {
@@ -107,19 +191,67 @@ public class GameEndPoint : MonoBehaviour
     {
 
     }
-    public void TryConnect(string ip,int port,int id,string password)
+    public void startConnect(string ip, int port, int id, string password)
     {
-        
-        IPAddress sip = IPAddress.Parse(ip);
-        IPEndPoint tragetEP = new IPEndPoint(sip, port);
-        IPEndPoint localEP = new IPEndPoint(IPAddress.Any, gamePort);
-        textShow.Log("gameEndPoint 嘗試linked:" + localEP + "到服務器:" + tragetEP);
-        Socket serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        serverSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        serverSocket.Bind(localEP);
-        serverSocket.Connect(tragetEP);
-        textShow.Log("gameEndPoint 連接服務器成功");
-        serverSocket.Send(Encoding.UTF8.GetBytes("1~"+id+","+password+"|"));
+        try {
+            IPAddress sip = IPAddress.Parse(ip);
+            IPEndPoint tragetEP = new IPEndPoint(sip, port);
+            IPEndPoint localEP = new IPEndPoint(IPAddress.Any, gamePort);
+            textShow.Log("gameEndPoint 嘗試linked:" + localEP + "到服務器:" + tragetEP);
+            Socket serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            serverSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            serverSocket.Bind(localEP);
+            serverSocket.Connect(tragetEP);
+            textShow.Log("gameEndPoint 連接服務器成功");
+            serverSocket.Send(Encoding.UTF8.GetBytes("1~" + id + "," + password + "|"));
+        }
+        catch (Exception e)
+        {
+            textShow.Log("gameEndPoint連接服務器失敗錯誤信息:\n" + e);
+        }
+    }
+    public void conncetRemoteEndPoint(string ip,int port)
+    {
+        try
+        {
+
+
+            IPAddress sip;
+            if(!IPAddress.TryParse(ip,out sip))
+            {
+                ConnectClient.main.requst_answerConnectRemote(2);
+                return;
+            }
+
+            IPEndPoint tragetEP = new IPEndPoint(sip, port);
+            IPEndPoint localEP = new IPEndPoint(IPAddress.Any, gamePort);
+            Socket serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            serverSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            serverSocket.Bind(localEP);
+            serverSocket.Connect(tragetEP);
+            if (BeServer)
+            {
+                serverSocket.Shutdown(SocketShutdown.Both);
+                serverSocket.Close();
+                //Thread temp = new Thread(tempReceive);
+                //temp.IsBackground = true;
+                //temp.Start(serverSocket);
+                
+            }
+            else {
+                server = new RemoteServer(serverSocket,this);
+                sthread = new Thread(server.doit);
+                sthread.IsBackground = true;
+                sthread.Start();
+                
+            }
+            ConnectClient.main.requst_answerConnectRemote(1);
+        }
+        catch (Exception e)
+        {
+            ConnectClient.main.requst_answerConnectRemote(0);
+            textShow.Log("gameEndPoint連接遠端失敗\nip:"+ip+"port:"+port+" 錯誤信息:\n" + e);
+        }
     }
     void OnDestroy()
     {

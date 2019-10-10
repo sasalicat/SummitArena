@@ -18,7 +18,7 @@ public class tableIcon : MonoBehaviour {
     }
     public void onClick()
     {
-
+        ConnectClient.main.requst_connectTable(index);
     }
     
 }

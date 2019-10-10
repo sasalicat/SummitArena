@@ -31,12 +31,22 @@ public class DebugPanel : MonoBehaviour,orderHandle {
     } 
     public void action3_CreateTableRequest(Dictionary<string,object> args)
     {
-        rpanel.
+        List<string> list = (List<string>)args["roles"];
+        List<object> objList = new List<object>();
+        foreach (string str in list) {
+            objList.Add(str);
+        }
+        rpanel.Init(objList);
+    }public void action4_AddNewPlayer(Dictionary<string,object> args)
+    {
+        string player = (string)args["player"];
+        rpanel.addNewObj(player);
     }
     // Use this for initialization
     void Start () {
         functionList[0]=action0_GetTableList;
         functionList[3] = action3_CreateTableRequest;
+        functionList[4] = action4_AddNewPlayer;
 	}
 	
 	// Update is called once per frame

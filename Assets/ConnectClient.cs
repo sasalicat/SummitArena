@@ -94,7 +94,7 @@ public class ConnectClient : MonoBehaviour {
                                     idInTable = id;
                                     password = subs[1];
                                     textShow.Log("登入tableServer完成,收到id:" + idInTable + "password:" + password);
-                                    gEndPoint.TryConnect(serverIP,serverPort, idInTable, password);
+                                    gEndPoint.startConnect(serverIP,serverPort, idInTable, password);
                                 }
                                 break;
                             }
@@ -106,14 +106,13 @@ public class ConnectClient : MonoBehaviour {
 
                                 if (!int.TryParse(subs[1], out port))
                                 {
-                                    string packet = "5~3|";
-                                    SocketClient.Send(Encoding.UTF8.GetBytes(packet));
+                                    requst_answerConnectRemote(2);
                                 }
                                 else
                                 {
                                     Console.WriteLine("收到Connect Requst");
                                     Console.WriteLine("連接請求 ip:" + ip + " port:" + port);
-
+                                    gEndPoint.conncetRemoteEndPoint(ip, port);
                                     
 
 
@@ -127,11 +126,11 @@ public class ConnectClient : MonoBehaviour {
                                 int c;
                                 if (!int.TryParse(subs[0], out c))
                                 {
-                                    textShow.Log("解析greeting request 錯誤的code:" + subs[0] + "不是數字");
+                                    textShow.Log("解析創建房間錯誤的code:" + subs[0] + "不是數字");
                                 }
                                 else
                                 {
-                                    if(code == 1)
+                                    if(c == 1)
                                     {
                                         Dictionary<string, object> args = new Dictionary<string, object>();
                                         List<string> names = new List<string>(subs[1].Split('/'));
@@ -286,4 +285,13 @@ public class ConnectClient : MonoBehaviour {
         SocketClient.Send(Encoding.UTF8.GetBytes(packet));
         gEndPoint.BeServer = true;
     }
+    public void requst_connectTable(int table_index)
+    {
+        SocketClient.Send(Encoding.UTF8.GetBytes( "4~" + table_index+"|"));
+    }
+    public void requst_answerConnectRemote(int resultCode)
+    {
+        SocketClient.Send(Encoding.UTF8.GetBytes("5~"+resultCode+"|"));
+    }
 }
+
