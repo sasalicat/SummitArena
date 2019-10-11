@@ -197,7 +197,7 @@ public class ConnectClient : MonoBehaviour {
         {
             try
             {
-                Debug.Log("recv");
+                
                 //定義一個1M的記憶體緩衝區，用於臨時性儲存接收到的訊息  
 
                 //將客戶端套接字接收到的資料存入記憶體緩衝區，並獲取長度  
@@ -209,7 +209,7 @@ public class ConnectClient : MonoBehaviour {
                 }
                 //將套接字獲取到的字元陣列轉換為人可以看懂的字串  
                 string strRevMsg = Encoding.UTF8.GetString(buffer, 0, length);
-                
+                Debug.Log("recv:" +strRevMsg);
                 readMsg(strRevMsg);
             }
             catch (Exception ex)
@@ -292,6 +292,9 @@ public class ConnectClient : MonoBehaviour {
     public void requst_answerConnectRemote(int resultCode)
     {
         SocketClient.Send(Encoding.UTF8.GetBytes("5~"+resultCode+"|"));
+    }
+    public void requst_rename() {
+        SocketClient.Send(Encoding.UTF8.GetBytes("6~" + username + "|"));
     }
 }
 

@@ -42,11 +42,15 @@ public class DebugPanel : MonoBehaviour,orderHandle {
         string player = (string)args["player"];
         rpanel.addNewObj(player);
     }
+    public void action5_ChatMessage(Dictionary<string, object> args) {
+        rpanel.chat((int)args["index"], (string)args["message"]);
+    }
     // Use this for initialization
     void Start () {
         functionList[0]=action0_GetTableList;
         functionList[3] = action3_CreateTableRequest;
         functionList[4] = action4_AddNewPlayer;
+        functionList[5] = action5_ChatMessage;
 	}
 	
 	// Update is called once per frame

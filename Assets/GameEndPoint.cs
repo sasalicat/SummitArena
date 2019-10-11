@@ -26,6 +26,7 @@ public class RemoteEndPoint
         {
             try
             {
+                
                 //定義一個1M的記憶體緩衝區，用於臨時性儲存接收到的訊息  
 
                 //將客戶端套接字接收到的資料存入記憶體緩衝區，並獲取長度  
@@ -39,7 +40,7 @@ public class RemoteEndPoint
                 }
                 //將套接字獲取到的字元陣列轉換為人可以看懂的字串  
                 string strRevMsg = Encoding.UTF8.GetString(buffer, 0, length);
-                textShow.Log("收到信息:" + strRevMsg);
+                textShow.Log("RemoteEndPint收到信息:" + strRevMsg);
                 decodeMsg(strRevMsg);
             }
             catch (Exception ex)
@@ -56,13 +57,40 @@ public class RemoteEndPoint
         socket.Shutdown(SocketShutdown.Both);
         socket.Close();
     }
+    public void Send(string packet)
+    {
+        socket.Send(Encoding.UTF8.GetBytes(packet));
+    }
 }
 public class RemoteClient: RemoteEndPoint
 {
-    public RemoteClient(Socket s,GameEndPoint ep):base(s,ep)
+    int index;
+    public RemoteClient(Socket s,GameEndPoint ep,int idx):base(s,ep)
     {
-       
+        index = idx;
     }
+    protected virtual void roomUpdate(List<string> players)
+    {
+        string packet = "0~";
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (i == 0)
+            {
+                packet += players[0];
+            }
+            else
+            {
+                packet += "/" + players[i];
+            }
+
+        }
+        packet += "|";
+        Debug.Log("發出requst to port:" + ((IPEndPoint)socket.RemoteEndPoint).Port);
+        //textShow.Log("發出requst to port:" + ((IPEndPoint)socket.RemoteEndPoint).Port);
+        socket.Send(Encoding.UTF8.GetBytes(packet));
+    }
+    /*
     protected virtual void requstEnterRoom()
     {
         string packet = "0~";
@@ -80,10 +108,13 @@ public class RemoteClient: RemoteEndPoint
 
         }
         packet += "|";
+        Debug.Log("發出requst to port:"+((IPEndPoint)socket.RemoteEndPoint).Port);
+        textShow.Log("發出requst to port:" + ((IPEndPoint)socket.RemoteEndPoint).Port);
         socket.Send(Encoding.UTF8.GetBytes(packet));
-    }
+    }*/
     protected override void decodeMsg(string msg)
     {
+
         string[] orders = msg.Split('|');
         foreach (string order in orders)
         {
@@ -97,9 +128,21 @@ public class RemoteClient: RemoteEndPoint
                     {
                         case 0://client say hello 
                             {
+                                Debug.Log("從RemoteClient收到 code0");
                                 Dictionary<string, object> args = new Dictionary<string, object>() { { "player", parts[1] } };
                                 local_ep.handler.handle(new order(4, args));
-                                requstEnterRoom();//把當前房間里有誰告訴client
+                                
+                                room.Main.afterRoomChange += this.roomUpdate;//當room改變時,告知當前client改變后的情況
+                                break;
+                            }
+                        case 1://client send message to all client
+                            {
+                                Dictionary<string, object> args = new Dictionary<string, object>();
+                                args["index"] = index;
+                                args["message"] = parts[1];
+                                local_ep.handler.handle(new order(5, args));//先發一份給自己
+                                string packet = "1~" + index + ";" + parts[1] + "|";
+                                local_ep.broadcastInRoom(packet);
                                 break;
                             }
                     }
@@ -112,6 +155,7 @@ public class RemoteClient: RemoteEndPoint
         }
 
     }
+
 
 }
 public class RemoteServer : RemoteEndPoint
@@ -126,6 +170,54 @@ public class RemoteServer : RemoteEndPoint
         string name = ConnectClient.main.username;
         socket.Send(Encoding.UTF8.GetBytes("0~" + name + "|"));//發送greeting code
         base.doit();
+    }
+    protected override void decodeMsg(string msg)
+    {
+        Debug.Log("從remote server 收到信息:"+msg);
+        string[] orders = msg.Split('|');
+        foreach (string order in orders)
+        {
+            if (order != "")//split會切出""
+            {
+                string[] parts = msg.Split('~');
+                int code;
+                if (int.TryParse(parts[0], out code))
+                {
+                    switch (code)
+                    {
+                        case 0://server requst enter room
+                            {
+                                Debug.Log("remoteServer 收到enter room requst");
+                                string[] names = parts[1].Split('/');
+                                Dictionary<string, object> args = new Dictionary<string, object>() { { "roles", new List<string>(names) } };
+                                local_ep.handler.handle(new order(3, args));
+                                break;
+                            }
+                        case 1://server boradcast chat massage form a client
+                            {
+                                string[] subs = parts[1].Split(';');
+                                int index;
+                                if (!int.TryParse(subs[0], out index))
+                                {
+                                    textShow.Log("錯誤的聊天封包:" + parts[1]);
+                                }
+                                else {
+                                    Dictionary<string, object> args = new Dictionary<string, object>();
+                                    args["index"] = index;
+                                    args["message"] = subs[1];
+                                    local_ep.handler.handle(new order(5, args));
+                                }
+                                break;
+                            }
+
+                    }
+                }
+                else
+                {
+                    textShow.Log("來自RemoteServer的錯誤format:" + msg);
+                }
+            }
+        }
     }
 }
 public class GameEndPoint : MonoBehaviour
@@ -150,7 +242,7 @@ public class GameEndPoint : MonoBehaviour
             if (BeServer)
             {
                 textShow.Log("處理新的client");
-                RemoteClient handleClient = new RemoteClient(client,this);
+                RemoteClient handleClient = new RemoteClient(client,this, connects.Count);
                 Thread forSelfClient = new Thread(handleClient.doit);
                 threads.Add(forSelfClient);
                 connects.Add(handleClient);
@@ -239,6 +331,7 @@ public class GameEndPoint : MonoBehaviour
                 
             }
             else {
+                Debug.Log("connect server 連接ip:" + ip + " port:" + port);
                 server = new RemoteServer(serverSocket,this);
                 sthread = new Thread(server.doit);
                 sthread.IsBackground = true;
@@ -268,6 +361,32 @@ public class GameEndPoint : MonoBehaviour
         foreach(RemoteClient client in connects)
         {
             client.Close();
+        }
+    }
+    public void requst_sendMsg2Room(string msg)
+    {
+        if (BeServer)
+        {
+            Dictionary<string, object> args = new Dictionary<string, object>();
+            args["index"] = 0;
+            args["message"] = msg;
+            handler.handle(new order(5, args));
+            broadcastInRoom("1~0;" + msg + "|");
+        }
+        else {
+            server.Send("1~" + msg + "|");
+        }
+    }
+    public void broadcastInRoom(string msg)
+    {
+        Debug.Log("boradcast In Room");
+        if (BeServer)
+        {
+            foreach(RemoteClient client in connects)
+            {
+                Debug.Log("發給client");
+                client.Send(msg);
+            }
         }
     }
 }

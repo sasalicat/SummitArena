@@ -12,7 +12,7 @@ public class tablePanel : MonoBehaviour {
         foreach(tableData data in tlist)
         {
             GameObject obj = Instantiate(tableBar, panel.transform);
-            obj.GetComponent<tableIcon>().init(data);
+            obj.GetComponent<tableIcon>().init(data,quit);
             objectList.Add(obj);
             
         }
