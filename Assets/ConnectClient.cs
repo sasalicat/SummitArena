@@ -10,10 +10,18 @@ using System.Text;
 public class ConnectClient : MonoBehaviour {
     public string serverIP= "127.0.0.1";
     public int serverPort = 6000;
+    public int serverLinkPort = 6001;
     public int selfPort = 9487;
     public string username = "Jhon Cean!";
     protected byte[] buffer;
     public const int BUFFER_SIZE = 4096;
+    //用於重連
+    public int tryLeft = 5;
+    public const float RECONNECT_INTERVAL = 1f;
+    public float next_reconncet = RECONNECT_INTERVAL;
+
+    protected bool LinkedOk = false;
+    protected bool startLinked = false;
     protected Socket SocketClient;
     protected Thread ThreadClient;
     private int idInTable;
@@ -94,7 +102,8 @@ public class ConnectClient : MonoBehaviour {
                                     idInTable = id;
                                     password = subs[1];
                                     textShow.Log("登入tableServer完成,收到id:" + idInTable + "password:" + password);
-                                    gEndPoint.startConnect(serverIP,serverPort, idInTable, password);
+                                    gEndPoint.startConnect(serverIP,serverLinkPort, idInTable, password);
+                                    startLinked = true;
                                 }
                                 break;
                             }
@@ -110,8 +119,8 @@ public class ConnectClient : MonoBehaviour {
                                 }
                                 else
                                 {
-                                    Console.WriteLine("收到Connect Requst");
-                                    Console.WriteLine("連接請求 ip:" + ip + " port:" + port);
+                                    //Console.WriteLine("收到Connect Requst");
+                                    Console.WriteLine(">>>連接請求 ip:" + ip + " port:" + port);
                                     gEndPoint.conncetRemoteEndPoint(ip, port);
                                     
 
@@ -145,7 +154,24 @@ public class ConnectClient : MonoBehaviour {
                                 }
                                 break;
                             }
+                        case 4://linked_requst
+                            {
+                                int result;
+                                textShow.Log("收到linked result");
+                                if (int.TryParse(part[1], out result))
+                                {
+                                    if (result == 1)//連接成功
+                                    {
+                                        LinkedOk = true;
+                                        gEndPoint.startWaiting();
 
+                                    }
+                                }
+                                else {
+                                    textShow.Log("錯誤的linked requst code");
+                                }
+                                break;
+                            }
 
                     }
                 }
@@ -232,12 +258,15 @@ public class ConnectClient : MonoBehaviour {
         SocketClient.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         SocketClient.Bind(localEP);
         textShow.Log("連接tableServer: " + serverIP + ":" + serverPort);
+        textShow.Log("自身ip:"+IPAddress.Any+" port:"+selfPort);
         try
         {
             //客戶端套接字連線到網路節點上，用的是Connect  
             SocketClient.Connect(ipe);
             textShow.Log("成功與目標tableServer連接");
-            gEndPoint.startWaiting();
+            //SocketClient.Shutdown(SocketShutdown.Both);
+            //SocketClient.Close();
+            //gEndPoint.startWaiting();
             //本客戶端的ID
             //Random rand = new Random();
             //string sendsStr = "num"+rand.Next(0,10);
@@ -251,6 +280,18 @@ public class ConnectClient : MonoBehaviour {
         ThreadClient = new Thread(Recv);
         ThreadClient.IsBackground = true;
         ThreadClient.Start(SocketClient);
+    }
+    void Update() {
+        if (startLinked&&!LinkedOk && tryLeft>0)//如果還沒有連上且還有嘗試次數
+        {
+            next_reconncet -= Time.deltaTime;
+            if (next_reconncet <= 0) {
+                gEndPoint.startConnect(serverIP, serverLinkPort, idInTable, password);
+                tryLeft -= 1;
+                next_reconncet = RECONNECT_INTERVAL;
+                textShow.Log("開始重新嘗試Linked 剩餘次數:" + tryLeft);
+            }
+        }
     }
     void Start()
     {

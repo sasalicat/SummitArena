@@ -227,6 +227,8 @@ public class GameEndPoint : MonoBehaviour
     public Thread listenThread;
     public bool BeServer = false;
     public DebugPanel handler;
+    public GameObject rebind;
+
     protected List<RemoteClient> connects = new List<RemoteClient>();
     protected List<Thread> threads = new List<Thread>();
     protected RemoteServer server;
@@ -268,6 +270,8 @@ public class GameEndPoint : MonoBehaviour
     {
         textShow.Log("gameEndPoint 開始等待連接");
         listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        listenSocket.ExclusiveAddressUse = false;
+        //textShow.Log("設置ExclusiveAddressUse:" + listenSocket.ExclusiveAddressUse);
         listenSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         IPEndPoint serverIPE = new IPEndPoint(IPAddress.Any, gamePort);
         listenSocket.Bind(serverIPE);
@@ -281,7 +285,7 @@ public class GameEndPoint : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        
     }
     public void startConnect(string ip, int port, int id, string password)
     {
@@ -289,13 +293,25 @@ public class GameEndPoint : MonoBehaviour
             IPAddress sip = IPAddress.Parse(ip);
             IPEndPoint tragetEP = new IPEndPoint(sip, port);
             IPEndPoint localEP = new IPEndPoint(IPAddress.Any, gamePort);
+            /*
             textShow.Log("gameEndPoint 嘗試linked:" + localEP + "到服務器:" + tragetEP);
             Socket serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            serverSocket.ExclusiveAddressUse = false;
+            textShow.Log("設置ExclusiveAddressUse:" + serverSocket.ExclusiveAddressUse);
             serverSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             serverSocket.Bind(localEP);
             serverSocket.Connect(tragetEP);
             textShow.Log("gameEndPoint 連接服務器成功");
             serverSocket.Send(Encoding.UTF8.GetBytes("1~" + id + "," + password + "|"));
+            serverSocket.Shutdown(SocketShutdown.Both);
+            serverSocket.Close();
+            textShow.Log("斷開gameEndPoint 與 connectServer 的連接");*/
+            Socket temp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            temp.Bind(localEP);
+            temp.SendTo(Encoding.UTF8.GetBytes(id+";"+password+";"), tragetEP);
+            textShow.Log("udp 發送信息到:"+tragetEP);
+            temp.Close();
+            //startWaiting();
         }
         catch (Exception e)
         {
@@ -331,19 +347,20 @@ public class GameEndPoint : MonoBehaviour
                 
             }
             else {
-                Debug.Log("connect server 連接ip:" + ip + " port:" + port);
+                Debug.Log(">>>connect server 連接ip:" + ip + " port:" + port);
                 server = new RemoteServer(serverSocket,this);
                 sthread = new Thread(server.doit);
                 sthread.IsBackground = true;
                 sthread.Start();
                 
             }
+            textShow.Log(">>>動作成功");
             ConnectClient.main.requst_answerConnectRemote(1);
         }
         catch (Exception e)
         {
             ConnectClient.main.requst_answerConnectRemote(0);
-            textShow.Log("gameEndPoint連接遠端失敗\nip:"+ip+"port:"+port+" 錯誤信息:\n" + e);
+            textShow.Log(">>>gameEndPoint連接遠端失敗\nip:"+ip+"port:"+port+" 錯誤信息:\n" + e);
         }
     }
     void OnDestroy()
